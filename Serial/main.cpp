@@ -5,112 +5,99 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <openvdb/openvdb.h>
-#include <openvdb/tools/LevelSetUtil.h>
-#include <openvdb/tools/MeshToVolume.h>
-#include <openvdb/tools/VolumeToMesh.h>
-#include <openvdb/util/Util.h>
-#include <openvdb/math/Transform.h>
+#include <queue>
+#include <limits>
 
-void split(const std::string& in, std::vector<std::string>& result){
-	
-	size_t pos = 0;
-	size_t ndx = in.find(' ');
-	
-	while( true ){
-	
-		if( in[pos] != ' ' )
-			result.push_back( in.substr(pos, ndx - pos) );
+#define GRID_SIZE 128
 
-		if( ndx == std::string::npos ) break;
-		pos = ndx+1;
-		ndx = in.find(' ', pos);
+typedef struct voxel {
+	int x, y, z, w;
+	bool isNonTerminatingNode;
+} Voxel;
+
+typedef struct Comparator {
+	bool operator()(const Voxel& lhs, const Voxel& rhs) const {
+    	return lhs.w > rhs.w;
+    }	
+} Comparator;
+
+float dfb[GRID_SIZE][GRID_SIZE][GRID_SIZE];
+//float weight[GRID_SIZE][GRID_SIZE][GRID_SIZE];
+bool visited[GRID_SIZE][GRID_SIZE][GRID_SIZE];
+Voxel pathLink[GRID_SIZE][GRID_SIZE][GRID_SIZE];
+
+void init() {
+	for (int i = 0; i < GRID_SIZE; i++) {
+		for (int j = 0; j < GRID_SIZE; j++) {
+			for (int k = 0; k < GRID_SIZE; k++) {
+				//weight[i][j][k] = std::numeric_limits<float>::max();
+				visited[i][j][k] = false;
+			}
+		}
 	}
 }
 
-void ReadMesh(const char* filename, 
-		std::vector<openvdb::Vec3s>& verts,
-		std::vector<openvdb::Vec3I>& trys,
-		std::vector<openvdb::Vec4I>& polys){
-	
-	std::ifstream file;
-	file.open(filename, std::ifstream::in);
-	
-	std::string line;
-	std::vector<std::string> vals;
-	while(getline(file, line)){
-
-		vals.clear();
-		split(line, vals);
-		// vertex
-		if( line[0] == 'v' ){
-			if( vals.size() != 4 ){
-				fprintf(stderr, "problem with string: %s\n", line.c_str());
-				exit(1);
-			}
-			verts.push_back( openvdb::Vec3s(
-				atof(vals[1].c_str()), atof(vals[2].c_str()),
-				atof(vals[3].c_str())) );
-		}
-		
-		// face, using verticies in ->INDEX SPACE ?<-
-		else if( line[0] == 'f' ){
-			if( vals.size() != 4 && vals.size() != 5 ){
-				fprintf(stderr, "problem with string: %s\n", line.c_str());
-				exit(1);
-			}
-			
-			else if( vals.size() == 4 ){
-				trys.push_back( openvdb::Vec3I(
-					atoi(vals[1].c_str()), atoi(vals[2].c_str()),
-					atoi(vals[3].c_str())) );
-			}
-
-			else{
-				polys.push_back( openvdb::Vec4I(
-					atoi(vals[1].c_str()), atoi(vals[2].c_str()),
-					atoi(vals[3].c_str()), atoi(vals[4].c_str())) );
-			}
-		}
-	}
-	openvdb::math::Transform transform = openvdb::math::Transform();
-	// transform all the verts to index space
-	for( size_t i = 0; i < verts.size(); i++ ){
-    	verts[i] = transform.worldToIndex(verts[i]);
-	}
-	
-	file.close();
+bool isValidIndex(int i, int j, int k) {
+	if (i < 0 || i >= GRID_SIZE || j < 0 || j >= GRID_SIZE || k < 0 || k >= GRID_SIZE) return false;
+	return true;
 }
 
-void WriteMesh(const char* filename,
-		openvdb::tools::VolumeToMesh &mesh ){
-	
-	std::ofstream file;
-	file.open(filename);
-	
-	openvdb::tools::PointList *verts = &mesh.pointList();
-	openvdb::tools::PolygonPoolList *polys = &mesh.polygonPoolList();
-	
-	for( size_t i = 0; i < mesh.pointListSize(); i++ ){
-		openvdb::Vec3s &v = (*verts)[i];
-		file << "v " << v[0] << " " << v[1] << " " << v[2] << std::endl;
-	}
-
-	for( size_t i = 0; i < mesh.polygonPoolListSize(); i++ ){
-	
-		for( size_t ndx = 0; ndx < (*polys)[i].numTriangles(); ndx++ ){
-			openvdb::Vec3I *p = &((*polys)[i].triangle(ndx));
-			file << "f " << p->x() << " " << p->y() << " " << p->z() << std::endl;
-		}
-
-		for( size_t ndx = 0; ndx < (*polys)[i].numQuads(); ndx++ ){
-			openvdb::Vec4I *p = &((*polys)[i].quad(ndx));
-			file << "f " << p->x() << " " << p->y() << " " 
-									 << p->z() << " " << p->w() << std::endl;
+void insert_unmarked_neighbours(Voxel voxel, std::priority_queue<Voxel, std::vector<Voxel>, Comparator> &pq) {
+	for (int i = -1; i <=1; i++) {
+		for (int j = -1; j <= 1; j++) {
+			for (int k = -1; k <= 1; k++) {
+				int x = voxel.x + i;
+				int y = voxel.x + j;
+				int z = voxel.x + k;
+				if (isValidIndex(x, y, z) && !visited[x][y][z] && dfb[x][y][z] > 0) {
+					Voxel neighbour;
+					neighbour.x = x;
+					neighbour.y = y;
+					neighbour.z = z;
+					neighbour.w = dfb[x][y][z];
+					pathLink[x][y][z] = voxel;
+					(pathLink[x][y][z]).isNonTerminatingNode = true;
+				}
+			}
 		}
 	}
+}
 
-	file.close();
+void mst_extractor(int x, int y, int z) {
+	std::priority_queue<Voxel, std::vector<Voxel>, Comparator> pq;
+	std::vector<Voxel> pathLink;
+
+	Voxel s;
+	s.x = x;
+	s.y = y;
+	s.z = z;
+	s.w = dfb[x][y][z];
+	s.isNonTerminatingNode = false;
+	visited[x][y][z] = true;
+
+	Voxel c = s;
+	insert_unmarked_neighbours(c, pq);
+	while (!pq.empty()) {
+		c = pq.top();
+		pq.pop();
+		visited[c.x][c.y][c.z] = true;
+		insert_unmarked_neighbours(c, pq);
+	}
+}
+
+std::vector<Voxel> centerline_extractor(int x, int y, int z) {
+	std::vector<Voxel> centerLine;
+	Voxel v;
+	v.x = x;
+	v.y = y;
+	v.z = z;
+	while(v.isNonTerminatingNode) {
+		centerLine.push_back(v);
+		v = pathLink[v.x][v.y][v.z];
+	}
+	centerLine.push_back(v);
+
+	return centerLine;
 }
 
 int main(int argc, const char** argv){
@@ -119,55 +106,4 @@ int main(int argc, const char** argv){
 		fprintf(stderr, "Usage: vdbtest <obj file>\n");
 		exit(0);
 	}
-
-	openvdb::initialize();
-
-	// extract the verts and faces from object file
-	std::vector<openvdb::Vec3s> verts;
-	std::vector<openvdb::Vec4I> polys;
-	std::vector<openvdb::Vec3I> triangles;
-	ReadMesh(argv[1], verts, triangles, polys);
-
-	std::cout << "points: " << verts.size() 
-						<< " polys: " << polys.size() << std::endl;
-	
-	// first create a transform for the grid
-	//openvdb::math::Transform::Ptr transform = openvdb::math::Transform::createLinearTransform();
-	openvdb::math::Transform transform = openvdb::math::Transform();
-	
-	// now create the levelset
-	/*openvdb::tools::MeshToVolume<openvdb::FloatGrid> levelset(transform);
-	levelset.convertToLevelSet(verts, polys);
-	
-	// get the grid from the levelset
-	openvdb::FloatGrid::Ptr grid = levelset.distGridPtr();*/
-
-	//openvdb::FloatGrid::Ptr grid = openvdb::gridPtrCast<openvdb::FloatGrid>(openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(transform, verts, triangles, polys, openvdb::LEVEL_SET_HALF_WIDTH));
-	//openvdb::FloatGrid::Ptr grid = openvdb::gridPtrCast<openvdb::FloatGrid>(openvdb::tools::meshToLevelSet(transform, verts, triangles, polys, 3.0f));
-	openvdb::FloatGrid::Ptr grid = openvdb::tools::meshToLevelSet<openvdb::FloatGrid>(transform, verts, triangles, polys, 3.0f);
-
-	// convert the level set into a sparse fog volume
-	openvdb::tools::sdfToFogVolume<openvdb::FloatGrid>(grid.operator*());
-	
-	std::cout << "active voxel count: " << grid->activeVoxelCount() << std::endl;
-
-/*	
-	// prep some output to write the grid
-	std::string output(argv[1]);
-	output += ".vdb";
-	openvdb::io::File file(output.c_str());
-	openvdb::GridPtrVec gridsToWrite;
-	gridsToWrite.push_back(grid);
-	file.write(gridsToWrite);
-	file.close();
-*/
-
-	// convert volume back to mesh and output it
-	openvdb::tools::VolumeToMesh mesher;
-	mesher.operator()<openvdb::FloatGrid>( grid.operator*() );
-	std::cout << "points: " << mesher.pointListSize() 
-						<< " polys: " << mesher.polygonPoolListSize() << std::endl;
-
-	WriteMesh("testing.obj", mesher);
-	return 0;
 }

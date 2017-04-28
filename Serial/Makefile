@@ -1,5 +1,2 @@
 all:
-
-	g++ -std=c++11 -pthread -O3 -DNDEBUG -I . -I .. -isystem /usr/local/Cellar/boost/1.63.0/include -isystem /usr/local/Cellar/openexr/2.2.0/include -isystem /usr/local/Cellar/tbb/2017_U5/include -isystem /usr/local/Cellar/include -isystem /usr/local/Cellar/log4cplus/1.2.0/include -DOPENVDB_USE_BLOSC -DOPENVDB_USE_LOG4CPLUS -DOPENVDB_USE_GLFW_3 -o tool main.cpp -I . \
-	     -Wl,-rpath,/usr/local/Cellar/openvdb/4.0.1/lib -L/usr/local/Cellar/openvdb/4.0.1 /usr/local/Cellar/openvdb/4.0.1/lib/libopenvdb.4.0.1.dylib \
-	     -ldl -lm -lz -Wl,-rpath,/usr/local/Cellar/openexr/2.2.0/lib -L/usr/local/Cellar/openexr/2.2.0/lib -lHalf -Wl,-rpath,/usr/local/Cellar/tbb/2017_U5/lib -L/usr/local/Cellar/tbb/2017_U5/lib -ltbb -Wl,-rpath,/usr/local/Cellar/boost/1.63.0/lib -L/usr/local/Cellar/boost/1.63.0/lib -lboost_iostreams -lboost_system  -Wl,-rpath,/usr/local/Cellar/lib -L/usr/local/Cellar/lib -lblosc -Wl,-rpath,/usr/local/Cellar/log4cplus/1.2.0/lib -L/usr/local/Cellar/log4cplus/1.2.0/lib -llog4cplus -Wl,-rpath,/usr/local/Cellar/jemalloc/4.5.0/lib -L/usr/local/Cellar/jemalloc/4.5.0/lib -ljemalloc
+	g++ -std=c++11 -o tool main.cpp
