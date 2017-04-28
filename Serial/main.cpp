@@ -17,7 +17,7 @@ typedef struct voxel {
 
 typedef struct Comparator {
 	bool operator()(const Voxel& lhs, const Voxel& rhs) const {
-    	return lhs.w < rhs.w;
+    	return lhs.w > rhs.w;
     }	
 } Comparator;
 
@@ -68,6 +68,7 @@ void init() {
 			for (int k = 0; k < GRID_SIZE; k++) {
 				//weight[i][j][k] = std::numeric_limits<float>::max();
 				visited[i][j][k] = false;
+				(pathLink[i][j][k]).isNonTerminatingNode = false;
 			}
 		}
 	}
@@ -83,8 +84,8 @@ void insert_unmarked_neighbours(Voxel voxel, std::priority_queue<Voxel, std::vec
 		for (int j = -1; j <= 1; j++) {
 			for (int k = -1; k <= 1; k++) {
 				int x = voxel.x + i;
-				int y = voxel.x + j;
-				int z = voxel.x + k;
+				int y = voxel.y + j;
+				int z = voxel.z + k;
 				if (isValidIndex(x, y, z) && !visited[x][y][z] && dfb[x][y][z] > 0) {
 					Voxel neighbour;
 					neighbour.x = x;
@@ -93,10 +94,13 @@ void insert_unmarked_neighbours(Voxel voxel, std::priority_queue<Voxel, std::vec
 					neighbour.w = dfb[x][y][z];
 					pathLink[x][y][z] = voxel;
 					(pathLink[x][y][z]).isNonTerminatingNode = true;
+					visited[neighbour.x][neighbour.y][neighbour.z] = true;
+					pq.push(neighbour);
 				}
 			}
 		}
 	}
+	//std::cout << "pq size: " << pq.size() << std::endl;
 }
 
 void mst_extractor(int x, int y, int z) {
@@ -115,7 +119,11 @@ void mst_extractor(int x, int y, int z) {
 	insert_unmarked_neighbours(c, pq);
 	while (!pq.empty()) {
 		c = pq.top();
+		//std::cout << c.x << " " << c.y << " " << c.z << std::endl;
+		//std::cout << "before size " << pq.size() << std::endl;
 		pq.pop();
+		//std::cout << "after size " << pq.size() << std::endl;
+		//return;
 		visited[c.x][c.y][c.z] = true;
 		insert_unmarked_neighbours(c, pq);
 	}
