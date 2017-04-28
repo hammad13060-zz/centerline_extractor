@@ -17,7 +17,7 @@ typedef struct voxel {
 
 typedef struct Comparator {
 	bool operator()(const Voxel& lhs, const Voxel& rhs) const {
-    	return lhs.w > rhs.w;
+    	return lhs.w < rhs.w;
     }	
 } Comparator;
 
@@ -25,6 +25,42 @@ float dfb[GRID_SIZE][GRID_SIZE][GRID_SIZE];
 //float weight[GRID_SIZE][GRID_SIZE][GRID_SIZE];
 bool visited[GRID_SIZE][GRID_SIZE][GRID_SIZE];
 Voxel pathLink[GRID_SIZE][GRID_SIZE][GRID_SIZE];
+
+void read_dfb_3d_matrix() {
+    int i,j,k;
+    std::string delimiter = " ";
+    std::string line;
+    std::ifstream dfb_file("./../DFB_files/dfb_bunny.txt");
+    if (dfb_file.is_open())
+    {
+        i = 0;
+        k = 0;
+        while ( getline (dfb_file,line) )
+        {
+            if(line.size() < 2) {
+                i = 0;
+                k += 1;
+                continue;
+            }
+            size_t pos = 0;
+            std::string token;
+            j = 0;
+            while ((pos = line.find(delimiter)) != std::string::npos) {
+                token = line.substr(0, pos);
+                float d = std::atof(token.c_str());
+                dfb[i][j][k] = d;
+                //std::cout << i << " " << j << " " << k << std::endl;
+                //if (d > 0.0) std::cout << d << std::endl;
+                //std::cout << token << std::endl;
+                line.erase(0, pos + delimiter.length());
+                j+=1;
+            }
+            i+=1;
+
+        }
+        dfb_file.close();
+    }
+}
 
 void init() {
 	for (int i = 0; i < GRID_SIZE; i++) {
@@ -91,6 +127,7 @@ std::vector<Voxel> centerline_extractor(int x, int y, int z) {
 	v.x = x;
 	v.y = y;
 	v.z = z;
+	v.isNonTerminatingNode = true;
 	while(v.isNonTerminatingNode) {
 		centerLine.push_back(v);
 		v = pathLink[v.x][v.y][v.z];
@@ -102,8 +139,15 @@ std::vector<Voxel> centerline_extractor(int x, int y, int z) {
 
 int main(int argc, const char** argv){
 
-	if( argc != 2 || strcmp(argv[1], "-h") == 0 ){
-		fprintf(stderr, "Usage: vdbtest <obj file>\n");
-		exit(0);
-	}
+//	if( argc != 2 || strcmp(argv[1], "-h") == 0 ){
+//		fprintf(stderr, "Usage: vdbtest <obj file>\n");
+//		exit(0);
+//	}
+    read_dfb_3d_matrix();
+    init();
+    mst_extractor(0, 21, 47);
+    std::vector<Voxel> centerLine = centerline_extractor(45, 105, 14);
+    for (int i = 0; i < centerLine.size(); i++) {
+        std::cout << centerLine[i].x << " " << centerLine[i].y << " " << centerLine[i].z << std::endl;
+    }
 }
